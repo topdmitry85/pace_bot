@@ -89,7 +89,10 @@ async def handle_gpx(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Document.FILE_EXTENSION("gpx"), handle_gpx))
+    app.add_handler(MessageHandler(
+        filters.Document.ALL & filters.Document.FILE_NAME & (lambda m: m.document.file_name.endswith('.gpx')),
+        handle_gpx
+    ))
     print("Бот запущен. Ожидаю GPX-файлы...")
     app.run_polling()
 
