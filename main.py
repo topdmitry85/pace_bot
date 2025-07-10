@@ -42,3 +42,4 @@ async def handle_gpx(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if dt > 0 and dist > 0:
                     pace = (dt / 60) / (dist / 1000)  # мин/км
                     distances.append(dist)
+app.run_polling()
