@@ -1,100 +1,44 @@
 import os
 import io
 import gpxpy
-import gpxpy.gpx
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+)
 
-BOT_TOKEN = "7704340239:AAFFBXNGHOS2pmZgWeF-2icBieGWMkHsPTg"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-def calculate_pace_sko(gpx_data, segment_length=25):
-    gpx = gpxpy.parse(gpx_data)
-    points = []
-    for track in gpx.tracks:
-        for segment in track.segments:
-            points.extend(segment.points)
 
-    if len(points) < 2:
-        return None, None, None
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Пришли мне .gpx-файл, и я посчитаю, насколько ровно ты бежал 🏃‍♂️📈")
+
+
+async def handle_gpx(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    document = update.message.document
+
+    if not document.file_name.endswith(".gpx"):
+        await update.message.reply_text("Пожалуйста, пришли файл с расширением `.gpx`.")
+        return
+
+    file = await document.get_file()
+    file_path = await file.download_to_drive()
+
+    with open(file_path, 'r', encoding='utf-8') as gpx_file:
+        gpx = gpxpy.parse(gpx_file)
 
     distances = []
     times = []
-    cumulative_distance = 0.0
-    cumulative_time = 0.0
 
-    segment_paces = []
-    segment_dist = 0.0
-    segment_time = 0.0
-
-    for i in range(1, len(points)):
-        d = points[i-1].distance_3d(points[i])
-        t = (points[i].time - points[i-1].time).total_seconds()
-
-        if t <= 0:
-            continue
-
-        segment_dist += d
-        segment_time += t
-
-        if segment_dist >= segment_length:
-            pace = (segment_time / 60) / (segment_dist / 1000)
-            segment_paces.append(pace)
-            segment_dist = 0
-            segment_time = 0
-
-    if not segment_paces:
-        return None, None, None
-
-    mean_pace = np.mean(segment_paces)
-    std_dev = np.std(segment_paces)
-
-    return segment_paces, mean_pace, std_dev
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Пришли мне GPX-файл, и я рассчитаю СКО темпа.")
-
-async def handle_gpx(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.document:
-        await update.message.reply_text("Пожалуйста, пришли GPX-файл.")
-        return
-
-    file = await update.message.document.get_file()
-    file_data = await file.download_as_bytearray()
-
-    gpx_data = io.BytesIO(file_data)
-    segment_paces, mean_pace, std_dev = calculate_pace_sko(gpx_data)
-
-    if segment_paces is None:
-        await update.message.reply_text("Не удалось обработать GPX.")
-        return
-
-    # Построение графика
-    plt.figure(figsize=(10, 5))
-    plt.plot(segment_paces, label='Темп (мин/км)')
-    plt.axhline(y=mean_pace, color='r', linestyle='--', label='Средний темп')
-    plt.title("График темпа")
-    plt.xlabel("Сегмент")
-    plt.ylabel("Темп (мин/км)")
-    plt.legend()
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close()
-
-    sko_text = f"📏 СКО темпа: {std_dev:.2f} мин/км\n🟰 Средний темп: {mean_pace:.2f} мин/км"
-    await update.message.reply_photo(photo=buf, caption=sko_text)
-
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(
-        filters.Document.ALL & filters.Document.FILE_NAME & (lambda m: m.document.file_name.endswith('.gpx')),
-        handle_gpx
-    ))
-    print("Бот запущен. Ожидаю GPX-файлы...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+    for track in gpx.tracks:
+        for segment in track.segments:
+            for i in range(1, len(segment.points)):
+                p1 = segment.points[i - 1]
+                p2 = segment.points[i]
+                delta = p2.time - p1.time
+                dt = delta.total_seconds()
+                dist = p1.distance_3d(p2)
+                if dt > 0 and dist > 0:
+                    pace = (dt / 60) / (dist / 1000)  # мин/км
+                    distances.append(dist)
