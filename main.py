@@ -1,21 +1,10 @@
-from telegram import Update, Document
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
-import os
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-TOKEN = os.getenv("BOT_TOKEN")
+async def debug_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Файл получен! Сейчас попробую его обработать.")
+    print("✅ Получен файл:", update.message.document.file_name)
 
-async def handle_gpx(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = update.message.document
-    if file.file_name.endswith(".gpx"):
-        await update.message.reply_text(f"Получен GPX-файл: {file.file_name}")
-    else:
-        await update.message.reply_text("Пожалуйста, отправь GPX-файл.")
-
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_gpx))
-    print("🚀 Бот стартует")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+app = ApplicationBuilder().token("ТВОЙ_ТОКЕН").build()
+app.add_handler(MessageHandler(filters.Document.ALL, debug_file_handler))
+app.run_polling()
