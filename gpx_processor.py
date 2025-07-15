@@ -52,17 +52,29 @@ def parse_gpx(gpx_file_path):
 
 def process_gpx_file(file_path):
     segments = parse_gpx(file_path)
-    if not segments:
-        return "❌ Не удалось обработать GPX-файл."
 
+    # Фильтруем некорректные сегменты
+    segments = [s for s in segments if s['distance'] > 0 and s['duration'] > 0]
+
+    if not segments:
+        return "❌ Недостаточно корректных данных для анализа GPX-файла."
+
+    # Расчёт темпов
     paces = [seg['duration'] / seg['distance'] for seg in segments]
     avg_pace = sum(paces) / len(paces)
     stddev = math.sqrt(sum((p - avg_pace)**2 for p in paces) / len(paces))
 
+    # Индексы самого стабильного и нестабильного сегментов
     closest_idx = min(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
     worst_idx = max(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
 
-    def pace_diff(p): return f"{'+' if p >= 0 else '-'}{int(abs(p * 1000 // 60)):01d}:{int(abs(p * 1000 % 60)):02d}"
+    # Разница в темпе с форматированием
+    def pace_diff(p):
+        delta_sec = int(p * 1000)
+        minutes = delta_sec // 60
+        seconds = delta_sec % 60
+        sign = "+" if p >= 0 else "-"
+        return f"{sign}{abs(minutes)}:{abs(seconds):02d}"
 
     result = (
         "🏁 GPX-анализ завершён:\n\n"
@@ -78,3 +90,4 @@ def process_gpx_file(file_path):
         f"— Отклонение: {pace_diff(paces[worst_idx] - avg_pace)}"
     )
     return result
+
