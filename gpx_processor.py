@@ -29,25 +29,32 @@ def parse_gpx(gpx_file_path):
                 continue
             i = 0
             while i < len(points) - 1:
-                start = points[i]
-                dist = 0
-                j = i + 1
-                while j < len(points):
-                    d = haversine(start.latitude, start.longitude,
-                                  points[j].latitude, points[j].longitude)
-                    dist += d
-                    if dist >= 10:
-                        break
-                    j += 1
-                if j >= len(points):
-                    break
-                duration = (points[j].time - start.time).total_seconds()
-                segments.append({
-                    'distance': dist,
-                    'duration': duration,
-                    'start_km': sum(s['distance'] for s in segments) / 1000
-                })
-                i = j
+    start = points[i]
+    dist = 0
+    j = i + 1
+    while j < len(points):
+        d = haversine(start.latitude, start.longitude,
+                      points[j].latitude, points[j].longitude)
+        dist += d
+        if dist >= 20:  # изменили 10 -> 20 метров
+            break
+        j += 1
+    if j >= len(points):
+        break
+    duration = (points[j].time - start.time).total_seconds()
+
+    # 🔍 фильтр слишком коротких сегментов
+    if duration <= 3 or dist <= 0:
+        i = j
+        continue
+
+    segments.append({
+        'distance': dist,
+        'duration': duration,
+        'start_km': sum(s['distance'] for s in segments) / 1000
+    })
+    i = j
+    
     return segments
 
 def process_gpx_file(file_path):
