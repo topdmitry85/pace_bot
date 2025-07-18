@@ -10,11 +10,11 @@ def haversine(lat1, lon1, lat2, lon2):
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 def min_per_km(seconds_per_meter):
-    if seconds_per_meter == 0:
-        return "0:00"
-    pace_sec = 1000 / seconds_per_meter  # m/s -> sec/km
-    minutes = int(pace_sec // 60)
-    seconds = int(pace_sec % 60)
+    if seconds_per_meter <= 0 or seconds_per_meter == float('inf'):
+        return "—"
+    pace_sec_per_km = seconds_per_meter * 1000  # секунд на километр
+    minutes = int(pace_sec_per_km // 60)
+    seconds = int(round(pace_sec_per_km % 60))
     return f"{minutes}:{seconds:02d}"
 
 def parse_gpx(gpx_file_path):
@@ -72,11 +72,14 @@ def process_gpx_file(file_path):
     worst_idx = max(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
 
     def pace_diff(p):
-        total_sec = int(p * 1000)
-        minutes = abs(total_sec) // 60
-        seconds = abs(total_sec) % 60
-        sign = "+" if p >= 0 else "-"
-        return f"{sign}{minutes}:{seconds:02d}"
+    if not math.isfinite(p):
+        return "—"
+    pace_sec = p * 1000
+    sign = "+" if pace_sec >= 0 else "-"
+    pace_sec = abs(pace_sec)
+    minutes = int(pace_sec // 60)
+    seconds = int(round(pace_sec % 60))
+    return f"{sign}{minutes}:{seconds:02d}"
 
     result = (
         "🏁 GPX-анализ завершён:\n\n"
