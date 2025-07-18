@@ -17,16 +17,6 @@ def min_per_km(seconds_per_meter):
     seconds = int(round(pace_sec_per_km % 60))
     return f"{minutes}:{seconds:02d}"
 
-def pace_diff(p):
-    if not math.isfinite(p):
-        return "—"
-    pace_sec = p * 1000
-    sign = "+" if pace_sec >= 0 else "-"
-    pace_sec = abs(pace_sec)
-    minutes = int(pace_sec // 60)
-    seconds = int(round(pace_sec % 60))
-    return f"{sign}{minutes}:{seconds:02d}"
-
 def parse_gpx(gpx_file_path):
     with open(gpx_file_path, 'r') as f:
         gpx = gpxpy.parse(f)
@@ -48,15 +38,18 @@ def parse_gpx(gpx_file_path):
                     d = haversine(start.latitude, start.longitude,
                                   points[j].latitude, points[j].longitude)
                     dist += d
-                    if dist >= 20:
+                    if dist >= 20:  # длина сегмента — 20 метров
                         break
                     j += 1
                 if j >= len(points):
                     break
                 duration = (points[j].time - start.time).total_seconds()
+
+                # Пропускаем некорректные сегменты
                 if duration <= 3 or dist <= 0:
                     i = j
                     continue
+
                 segments.append({
                     'distance': dist,
                     'duration': duration,
@@ -71,15 +64,36 @@ def process_gpx_file(file_path):
     if not segments:
         return "❌ Не удалось обработать GPX-файл."
 
+    total_time = sum(seg['duration'] for seg in segments)
+    total_distance = sum(seg['distance'] for seg in segments)
+    avg_pace = total_time / total_distance
+
     paces = [seg['duration'] / seg['distance'] for seg in segments]
-    avg_pace = sum(paces) / len(paces)
-    stddev = math.sqrt(sum((p - avg_pace)**2 for p in paces) / len(paces))
+    stddev = math.sqrt(sum((p - avg_pace) ** 2 for p in paces) / len(paces))
 
     closest_idx = min(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
     worst_idx = max(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
 
+    def pace_diff(p):
+        if not math.isfinite(p):
+            return "—"
+        pace_sec = p * 1000
+        sign = "+" if pace_sec >= 0 else "-"
+        pace_sec = abs(pace_sec)
+        minutes = int(pace_sec // 60)
+        seconds = int(round(pace_sec % 60))
+        return f"{sign}{minutes}:{seconds:02d}"
+
+    total_minutes = int(total_time // 60)
+    total_seconds = int(total_time % 60)
+    total_hours = total_minutes // 60
+    total_minutes = total_minutes % 60
+    duration_str = f"{total_hours:02}:{total_minutes:02}:{total_seconds:02}"
+
     result = (
         "🏁 GPX-анализ завершён:\n\n"
+        f"— Дистанция: {total_distance / 1000:.2f} км\n"
+        f"— Время: {duration_str}\n"
         f"— Средний темп: {min_per_km(avg_pace)} /км\n"
         f"— СКО темпа: {pace_diff(stddev)} /км\n\n"
         f"🎯 Самый стабильный отрезок:\n"
