@@ -29,6 +29,6 @@ async def gpx_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("Ошибка:", e)
 
 # Запуск бота
-app = ApplicationBuilder().token("7704340239:AAGiqXM14UeD9tT5QNkMY-0SqnFU0xF7mLo").build()
+app = ApplicationBuilder().token(os.environ["BOT_TOKEN"]).build()
 app.add_handler(MessageHandler(filters.Document.FileExtension("gpx"), gpx_handler))
 app.run_polling()
