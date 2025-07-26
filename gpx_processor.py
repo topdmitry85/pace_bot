@@ -3,31 +3,32 @@ import math
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000  # радиус Земли в метрах
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
     d_phi = math.radians(lat2 - lat1)
     d_lambda = math.radians(lon2 - lon1)
-    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    a = math.sin(d_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-def format_pace(seconds_per_km):
-    if not math.isfinite(seconds_per_km) or seconds_per_km <= 0:
+def min_per_km(seconds_per_meter):
+    if seconds_per_meter <= 0 or seconds_per_meter == float('inf'):
         return "—"
-    minutes = int(seconds_per_km // 60)
-    seconds = int(round(seconds_per_km % 60))
+    pace_sec_per_km = seconds_per_meter * 1000
+    minutes = int(pace_sec_per_km // 60)
+    seconds = int(round(pace_sec_per_km % 60))
     return f"{minutes}:{seconds:02d}"
 
-def pace_difference(delta_sec_per_km):
-    if not math.isfinite(delta_sec_per_km):
+def pace_diff(p):
+    if not math.isfinite(p):
         return "—"
-    sign = "+" if delta_sec_per_km >= 0 else "-"
-    delta_sec_per_km = abs(delta_sec_per_km)
-    minutes = int(delta_sec_per_km // 60)
-    seconds = int(round(delta_sec_per_km % 60))
+    pace_sec = p * 1000
+    sign = "+" if pace_sec >= 0 else "-"
+    pace_sec = abs(pace_sec)
+    minutes = int(pace_sec // 60)
+    seconds = int(round(pace_sec % 60))
     return f"{sign}{minutes}:{seconds:02d}"
 
-def analyze_gpx(file_path):
-    with open(file_path, 'r') as f:
+def parse_gpx(gpx_file_path):
+    with open(gpx_file_path, 'r') as f:
         gpx = gpxpy.parse(f)
 
     all_points = []
@@ -36,19 +37,29 @@ def analyze_gpx(file_path):
             all_points.extend(segment.points)
 
     if len(all_points) < 2:
-        return "❌ Недостаточно точек в файле."
+        return None
 
+    # Вычисляем общее расстояние и время
     total_distance = 0
+    for i in range(1, len(all_points)):
+        total_distance += haversine(
+            all_points[i - 1].latitude, all_points[i - 1].longitude,
+            all_points[i].latitude, all_points[i].longitude
+        )
     start_time = all_points[0].time
     end_time = all_points[-1].time
+    total_duration = (end_time - start_time).total_seconds()
 
-    segment_list = []
+    # Разбиваем на 20-метровые сегменты
+    segments = []
+    total_dist_progress = 0
     i = 0
     while i < len(all_points) - 1:
+        start = all_points[i]
         dist = 0
         j = i + 1
         while j < len(all_points):
-            d = haversine(all_points[i].latitude, all_points[i].longitude,
+            d = haversine(start.latitude, start.longitude,
                           all_points[j].latitude, all_points[j].longitude)
             dist += d
             if dist >= 20:
@@ -56,49 +67,54 @@ def analyze_gpx(file_path):
             j += 1
         if j >= len(all_points):
             break
-
-        duration = (all_points[j].time - all_points[i].time).total_seconds()
-
-        # Пропускаем слишком короткие или нулевые сегменты
-        if duration <= 2 or dist <= 0:
+        duration = (all_points[j].time - start.time).total_seconds()
+        if duration <= 3 or dist <= 0:
             i = j
             continue
-
-        segment_list.append({
+        segments.append({
             'distance': dist,
             'duration': duration,
-            'start_km': total_distance / 1000
+            'start_km': total_dist_progress / 1000
         })
-        total_distance += dist
+        total_dist_progress += dist
         i = j
 
-    if not segment_list:
-        return "❌ Не удалось выделить ни одного подходящего сегмента."
+    return {
+        "total_distance": total_distance,
+        "total_duration": total_duration,
+        "segments": segments
+    }
 
-    total_seconds = (end_time - start_time).total_seconds()
-    avg_pace_sec_per_km = total_seconds / (total_distance / 1000)
+def process_gpx_file(file_path):
+    data = parse_gpx(file_path)
+    if not data or not data["segments"]:
+        return "❌ Не удалось обработать GPX-файл."
 
-    paces = [seg['duration'] / seg['distance'] * 1000 for seg in segment_list]
+    segments = data["segments"]
+    paces = [seg["duration"] / seg["distance"] for seg in segments]
     avg_pace = sum(paces) / len(paces)
     stddev = math.sqrt(sum((p - avg_pace) ** 2 for p in paces) / len(paces))
 
     closest_idx = min(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
     worst_idx = max(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
 
-    # Формируем результат
+    minutes = int(data["total_duration"] // 60)
+    seconds = int(round(data["total_duration"] % 60))
+    formatted_time = f"{minutes:02d}:{seconds:02d}"
+
     result = (
         "🏁 GPX-анализ завершён:\n\n"
-        f"📏 Дистанция: {total_distance / 1000:.2f} км\n"
-        f"⏱️ Время: {int(total_seconds // 60):02d}:{int(total_seconds % 60):02d}\n"
-        f"🚀 Средний темп: {format_pace(avg_pace_sec_per_km)} /км\n"
-        f"📊 СКО темпа: {pace_difference(stddev)} /км\n\n"
+        f"— Дистанция: {data['total_distance'] / 1000:.2f} км\n"
+        f"— Время: {formatted_time}\n"
+        f"— Средний темп: {min_per_km(avg_pace)} /км\n"
+        f"— СКО темпа: {pace_diff(stddev)} /км\n\n"
         f"🎯 Самый стабильный отрезок:\n"
-        f"— Отметка: {segment_list[closest_idx]['start_km']:.2f} км\n"
-        f"— Темп: {format_pace(paces[closest_idx])} /км\n"
-        f"— Отклонение: {pace_difference(paces[closest_idx] - avg_pace)}\n\n"
+        f"— Отметка {segments[closest_idx]['start_km']:.2f} км\n"
+        f"— Темп: {min_per_km(paces[closest_idx])} /км\n"
+        f"— Отклонение: {pace_diff(paces[closest_idx] - avg_pace)}\n\n"
         f"⚠️ Самый нестабильный отрезок:\n"
-        f"— Отметка: {segment_list[worst_idx]['start_km']:.2f} км\n"
-        f"— Темп: {format_pace(paces[worst_idx])} /км\n"
-        f"— Отклонение: {pace_difference(paces[worst_idx] - avg_pace)}"
+        f"— Отметка {segments[worst_idx]['start_km']:.2f} км\n"
+        f"— Темп: {min_per_km(paces[worst_idx])} /км\n"
+        f"— Отклонение: {pace_diff(paces[worst_idx] - avg_pace)}"
     )
     return result
