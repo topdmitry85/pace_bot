@@ -32,26 +32,28 @@ def process_gpx_file(file_path):
 
     previous_point = all_points[0]
     start_time = previous_point.time
-    end_time = previous_point.time
 
     for point in all_points[1:]:
         dist = point.distance_3d(previous_point) or 0
         time_diff = (point.time - previous_point.time).total_seconds() if point.time and previous_point.time else 0
 
-        if time_diff > 0:
-            total_distance += dist
-            total_time += time_diff
-            segment_dist += dist
-            segment_time += time_diff
-            end_time = point.time
+        total_distance += dist
+        total_time += time_diff
+        segment_dist += dist
+        segment_time += time_diff
 
-            if segment_dist >= SEGMENT_LENGTH_METERS:
-                pace = segment_time / (segment_dist / 1000)  # сек/км
-                segment_paces.append(pace)
-                segment_dist = 0
-                segment_time = 0
+        if segment_dist >= SEGMENT_LENGTH_METERS:
+            pace = segment_time / (segment_dist / 1000)
+            segment_paces.append(pace)
+            segment_dist = 0
+            segment_time = 0
 
         previous_point = point
+
+    # Учет последнего сегмента, если он был менее 20 м
+    if segment_dist > 0 and segment_time > 0:
+        pace = segment_time / (segment_dist / 1000)
+        segment_paces.append(pace)
 
     if total_distance == 0 or total_time == 0:
         return "❌ Ошибка: невозможно вычислить параметры."
@@ -60,7 +62,6 @@ def process_gpx_file(file_path):
     pace_diffs = [(p - avg_pace) ** 2 for p in segment_paces]
     std_dev = (sum(pace_diffs) / len(pace_diffs)) ** 0.5 if pace_diffs else 0
 
-    # Поиск самого стабильного и нестабильного отрезков
     min_dev = min(pace_diffs) if pace_diffs else 0
     max_dev = max(pace_diffs) if pace_diffs else 0
     min_index = pace_diffs.index(min_dev) if pace_diffs else 0
