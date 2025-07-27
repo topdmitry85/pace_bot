@@ -20,13 +20,15 @@ async def gpx_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text("📥 Файл получен! Начинаю анализ...")
 
-        report, image_buffer = process_gpx(local_path)
+        report, pace_image, hist_image = process_gpx(local_path)
 
-        if image_buffer:
-            await update.message.reply_text(report)
-            await update.message.reply_photo(photo=image_buffer, caption="📈 График темпа по дистанции")
-        else:
-            await update.message.reply_text(report)
+        await update.message.reply_text(report)
+
+        if pace_image:
+            await update.message.reply_photo(photo=pace_image, caption="📈 График темпа по дистанции")
+
+        if hist_image:
+            await update.message.reply_photo(photo=hist_image, caption="📊 Распределение темпа")
 
         os.remove(local_path)
 
