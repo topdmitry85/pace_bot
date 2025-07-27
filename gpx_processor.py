@@ -1,6 +1,9 @@
 import gpxpy
 import gpxpy.gpx
 from datetime import timedelta
+import matplotlib.pyplot as plt
+import io
+import base64
 
 SEGMENT_LENGTH_METERS = 20
 
@@ -10,6 +13,23 @@ def format_pace(seconds_per_km):
     minutes = int(seconds_per_km // 60)
     seconds = int(seconds_per_km % 60)
     return f"{minutes}:{seconds:02d}"
+
+def plot_pace_graph(segment_paces, avg_pace):
+    plt.figure(figsize=(10, 4))
+    x = [i * SEGMENT_LENGTH_METERS / 1000 for i in range(len(segment_paces))]
+    plt.plot(x, segment_paces, label='Темп (с/км)', color='blue')
+    plt.axhline(avg_pace, color='red', linestyle='--', label='Средний темп')
+    plt.xlabel('Дистанция (км)')
+    plt.ylabel('Темп (с/км)')
+    plt.title('График темпа по отрезкам')
+    plt.legend()
+    plt.grid(True)
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    encoded_image = base64.b64encode(buffer.read()).decode('utf-8')
+    plt.close()
+    return encoded_image
 
 def process_gpx_file(file_path):
     with open(file_path, 'r') as gpx_file:
@@ -75,6 +95,9 @@ def process_gpx_file(file_path):
     max_pace = segment_paces[max_index] if segment_paces else 0
 
     distance_km = total_distance / 1000
+
+    image_base64 = plot_pace_graph(segment_paces, avg_pace)
+
     report = f"""
 🏁 GPX-анализ завершён:
 📏 Дистанция: {distance_km:.2f} км
@@ -91,5 +114,8 @@ def process_gpx_file(file_path):
 — Отметка {max_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
 — Темп: {format_pace(max_pace)} /км
 — Отклонение: ±{int(max_dev):02d} сек
+
+🖼️ График темпа:
+data:image/png;base64,{image_base64}
 """
     return report.strip()
