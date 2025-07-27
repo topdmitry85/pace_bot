@@ -14,12 +14,16 @@ def format_pace(seconds_per_km):
     return f"{minutes}:{seconds:02d}"
 
 def plot_pace_graph(segment_paces, avg_pace):
+    # Преобразуем темп в мин/км
+    segment_paces_min_per_km = [p / 60 for p in segment_paces]
+    avg_pace_min_per_km = avg_pace / 60
+
     plt.figure(figsize=(10, 4))
     x = [i * SEGMENT_LENGTH_METERS / 1000 for i in range(len(segment_paces))]
-    plt.plot(x, segment_paces, label='Темп (с/км)', color='blue')
-    plt.axhline(avg_pace, color='red', linestyle='--', label='Средний темп')
+    plt.plot(x, segment_paces_min_per_km, label='Темп (мин/км)', color='blue')
+    plt.axhline(avg_pace_min_per_km, color='red', linestyle='--', label='Средний темп')
     plt.xlabel('Дистанция (км)')
-    plt.ylabel('Темп (с/км)')
+    plt.ylabel('Темп (мин/км)')
     plt.title('График темпа по отрезкам')
     plt.legend()
     plt.grid(True)
