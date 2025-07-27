@@ -3,7 +3,6 @@ import gpxpy.gpx
 from datetime import timedelta
 import matplotlib.pyplot as plt
 import io
-import base64
 
 SEGMENT_LENGTH_METERS = 20
 
@@ -27,9 +26,8 @@ def plot_pace_graph(segment_paces, avg_pace):
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
     buffer.seek(0)
-    encoded_image = base64.b64encode(buffer.read()).decode('utf-8')
     plt.close()
-    return encoded_image
+    return buffer
 
 def process_gpx_file(file_path):
     with open(file_path, 'r') as gpx_file:
@@ -42,7 +40,7 @@ def process_gpx_file(file_path):
             all_points.extend(segment.points)
 
     if len(all_points) < 2:
-        return "❌ Недостаточно данных в GPX-файле."
+        return "❌ Недостаточно данных в GPX-файле.", None
 
     total_distance = 0
     total_time = 0
@@ -78,7 +76,7 @@ def process_gpx_file(file_path):
         segment_paces.append(pace)
 
     if total_distance == 0 or total_time == 0:
-        return "❌ Ошибка: невозможно вычислить параметры."
+        return "❌ Ошибка: невозможно вычислить параметры.", None
 
     avg_pace = total_time / (total_distance / 1000)
     pace_diffs = [(p - avg_pace) ** 2 for p in segment_paces]
@@ -96,7 +94,7 @@ def process_gpx_file(file_path):
 
     distance_km = total_distance / 1000
 
-    image_base64 = plot_pace_graph(segment_paces, avg_pace)
+    image_buffer = plot_pace_graph(segment_paces, avg_pace)
 
     report = f"""
 🏁 GPX-анализ завершён:
@@ -108,14 +106,12 @@ def process_gpx_file(file_path):
 🎯 Самый стабильный отрезок:
 — Отметка {min_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
 — Темп: {format_pace(min_pace)} /км
-— Отклонение: ±{int(min_dev):02d} сек
+— Отклонение: ±{format_pace(min_dev)} /км
 
 ⚠️ Самый нестабильный отрезок:
 — Отметка {max_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
 — Темп: {format_pace(max_pace)} /км
-— Отклонение: ±{int(max_dev):02d} сек
+— Отклонение: ±{format_pace(max_dev)} /км
+""".strip()
 
-🖼️ График темпа:
-data:image/png;base64,{image_base64}
-"""
-    return report.strip()
+    return report, image_buffer
