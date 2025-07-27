@@ -1,120 +1,90 @@
 import gpxpy
-import math
+import gpxpy.gpx
+from datetime import timedelta
 
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371000  # радиус Земли в метрах
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    d_phi = math.radians(lat2 - lat1)
-    d_lambda = math.radians(lon2 - lon1)
-    a = math.sin(d_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2)**2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+SEGMENT_LENGTH_METERS = 20
 
-def min_per_km(seconds_per_meter):
-    if seconds_per_meter <= 0 or seconds_per_meter == float('inf'):
-        return "—"
-    pace_sec_per_km = seconds_per_meter * 1000
-    minutes = int(pace_sec_per_km // 60)
-    seconds = int(round(pace_sec_per_km % 60))
+def format_pace(seconds_per_km):
+    if seconds_per_km == 0:
+        return "0:00"
+    minutes = int(seconds_per_km // 60)
+    seconds = int(seconds_per_km % 60)
     return f"{minutes}:{seconds:02d}"
 
-def pace_diff(p):
-    if not math.isfinite(p):
-        return "—"
-    pace_sec = p * 1000
-    sign = "+" if pace_sec >= 0 else "-"
-    pace_sec = abs(pace_sec)
-    minutes = int(pace_sec // 60)
-    seconds = int(round(pace_sec % 60))
-    return f"{sign}{minutes}:{seconds:02d}"
-
-def parse_gpx(gpx_file_path):
-    with open(gpx_file_path, 'r') as f:
-        gpx = gpxpy.parse(f)
+def process_gpx_file(file_path):
+    with open(file_path, 'r') as gpx_file:
+        gpx = gpxpy.parse(gpx_file)
 
     all_points = []
+
     for track in gpx.tracks:
         for segment in track.segments:
             all_points.extend(segment.points)
 
     if len(all_points) < 2:
-        return None
+        return "❌ Недостаточно данных в GPX-файле."
 
-    # Вычисляем общее расстояние и время
     total_distance = 0
-    for i in range(1, len(all_points)):
-        total_distance += haversine(
-            all_points[i - 1].latitude, all_points[i - 1].longitude,
-            all_points[i].latitude, all_points[i].longitude
-        )
-    start_time = all_points[0].time
-    end_time = all_points[-1].time
-    total_duration = (end_time - start_time).total_seconds()
+    total_time = 0
+    segment_paces = []
+    segment_dist = 0
+    segment_time = 0
 
-    # Разбиваем на 20-метровые сегменты
-    segments = []
-    total_dist_progress = 0
-    i = 0
-    while i < len(all_points) - 1:
-        start = all_points[i]
-        dist = 0
-        j = i + 1
-        while j < len(all_points):
-            d = haversine(start.latitude, start.longitude,
-                          all_points[j].latitude, all_points[j].longitude)
-            dist += d
-            if dist >= 20:
-                break
-            j += 1
-        if j >= len(all_points):
-            break
-        duration = (all_points[j].time - start.time).total_seconds()
-        if duration <= 3 or dist <= 0:
-            i = j
-            continue
-        segments.append({
-            'distance': dist,
-            'duration': duration,
-            'start_km': total_dist_progress / 1000
-        })
-        total_dist_progress += dist
-        i = j
+    previous_point = all_points[0]
+    start_time = previous_point.time
+    end_time = previous_point.time
 
-    return {
-        "total_distance": total_distance,
-        "total_duration": total_duration,
-        "segments": segments
-    }
+    for point in all_points[1:]:
+        dist = point.distance_3d(previous_point) or 0
+        time_diff = (point.time - previous_point.time).total_seconds() if point.time and previous_point.time else 0
 
-def process_gpx_file(file_path):
-    data = parse_gpx(file_path)
-    if not data or not data["segments"]:
-        return "❌ Не удалось обработать GPX-файл."
+        if time_diff > 0:
+            total_distance += dist
+            total_time += time_diff
+            segment_dist += dist
+            segment_time += time_diff
+            end_time = point.time
 
-    segments = data["segments"]
-    paces = [seg["duration"] / seg["distance"] for seg in segments]
-    avg_pace = sum(paces) / len(paces)
-    stddev = math.sqrt(sum((p - avg_pace) ** 2 for p in paces) / len(paces))
+            if segment_dist >= SEGMENT_LENGTH_METERS:
+                pace = segment_time / (segment_dist / 1000)  # сек/км
+                segment_paces.append(pace)
+                segment_dist = 0
+                segment_time = 0
 
-    closest_idx = min(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
-    worst_idx = max(range(len(paces)), key=lambda i: abs(paces[i] - avg_pace))
+        previous_point = point
 
-    minutes = int(data["total_duration"] // 60)
-    seconds = int(round(data["total_duration"] % 60))
-    formatted_time = f"{minutes:02d}:{seconds:02d}"
+    if total_distance == 0 or total_time == 0:
+        return "❌ Ошибка: невозможно вычислить параметры."
 
-    result = (
-        "🏁 GPX-анализ завершён:\n\n"
-        f"— Дистанция: {data['total_distance'] / 1000:.2f} км\n"
-        f"— Время: {formatted_time}\n"
-        f"— Средний темп: {min_per_km(avg_pace)} /км\n"
-        f"— СКО темпа: {pace_diff(stddev)} /км\n\n"
-        f"🎯 Самый стабильный отрезок:\n"
-        f"— Отметка {segments[closest_idx]['start_km']:.2f} км\n"
-        f"— Темп: {min_per_km(paces[closest_idx])} /км\n"
-        f"— Отклонение: {pace_diff(paces[closest_idx] - avg_pace)}\n\n"
-        f"⚠️ Самый нестабильный отрезок:\n"
-        f"— Отметка {segments[worst_idx]['start_km']:.2f} км\n"
-        f"— Темп: {min_per_km(paces[worst_idx])} /км\n"
-        f"— Отклонение: {pace_diff(paces[worst_idx] - avg_pace)}"
-    )
-    return result
+    avg_pace = total_time / (total_distance / 1000)
+    pace_diffs = [(p - avg_pace) ** 2 for p in segment_paces]
+    std_dev = (sum(pace_diffs) / len(pace_diffs)) ** 0.5 if pace_diffs else 0
+
+    # Поиск самого стабильного и нестабильного отрезков
+    min_dev = min(pace_diffs) if pace_diffs else 0
+    max_dev = max(pace_diffs) if pace_diffs else 0
+    min_index = pace_diffs.index(min_dev) if pace_diffs else 0
+    max_index = pace_diffs.index(max_dev) if pace_diffs else 0
+
+    min_pace = segment_paces[min_index] if segment_paces else 0
+    max_pace = segment_paces[max_index] if segment_paces else 0
+
+    distance_km = total_distance / 1000
+    report = f"""
+🏁 GPX-анализ завершён:
+📏 Дистанция: {distance_km:.2f} км
+⏱️ Время: {int(total_time // 60):02d}:{int(total_time % 60):02d}
+⚖️ Средний темп: {format_pace(avg_pace)} /км
+📊 СКО темпа: {format_pace(std_dev)} /км
+
+🎯 Самый стабильный отрезок:
+— Отметка {min_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
+— Темп: {format_pace(min_pace)} /км
+— Отклонение: ±{int((min_dev)**0.5):02d} сек
+
+⚠️ Самый нестабильный отрезок:
+— Отметка {max_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
+— Темп: {format_pace(max_pace)} /км
+— Отклонение: ±{int((max_dev)**0.5):02d} сек
+"""
+    return report.strip()
