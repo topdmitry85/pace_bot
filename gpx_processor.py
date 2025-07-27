@@ -32,6 +32,7 @@ def process_gpx_file(file_path):
 
     previous_point = all_points[0]
     start_time = previous_point.time
+    end_time = previous_point.time
 
     for point in all_points[1:]:
         dist = point.distance_3d(previous_point) or 0
@@ -41,16 +42,17 @@ def process_gpx_file(file_path):
         total_time += time_diff
         segment_dist += dist
         segment_time += time_diff
+        end_time = point.time
 
         if segment_dist >= SEGMENT_LENGTH_METERS:
-            pace = segment_time / (segment_dist / 1000)
+            pace = segment_time / (segment_dist / 1000)  # сек/км
             segment_paces.append(pace)
             segment_dist = 0
             segment_time = 0
 
         previous_point = point
 
-    # Учет последнего сегмента, если он был менее 20 м
+    # Учет последнего неполного сегмента
     if segment_dist > 0 and segment_time > 0:
         pace = segment_time / (segment_dist / 1000)
         segment_paces.append(pace)
@@ -62,10 +64,12 @@ def process_gpx_file(file_path):
     pace_diffs = [(p - avg_pace) ** 2 for p in segment_paces]
     std_dev = (sum(pace_diffs) / len(pace_diffs)) ** 0.5 if pace_diffs else 0
 
-    min_dev = min(pace_diffs) if pace_diffs else 0
-    max_dev = max(pace_diffs) if pace_diffs else 0
-    min_index = pace_diffs.index(min_dev) if pace_diffs else 0
-    max_index = pace_diffs.index(max_dev) if pace_diffs else 0
+    # Поиск самого стабильного и нестабильного отрезков
+    deviations = [abs(p - avg_pace) for p in segment_paces]
+    min_dev = min(deviations) if deviations else 0
+    max_dev = max(deviations) if deviations else 0
+    min_index = deviations.index(min_dev) if deviations else 0
+    max_index = deviations.index(max_dev) if deviations else 0
 
     min_pace = segment_paces[min_index] if segment_paces else 0
     max_pace = segment_paces[max_index] if segment_paces else 0
@@ -81,11 +85,11 @@ def process_gpx_file(file_path):
 🎯 Самый стабильный отрезок:
 — Отметка {min_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
 — Темп: {format_pace(min_pace)} /км
-— Отклонение: ±{int((min_dev)**0.5):02d} сек
+— Отклонение: ±{int(min_dev):02d} сек
 
 ⚠️ Самый нестабильный отрезок:
 — Отметка {max_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
 — Темп: {format_pace(max_pace)} /км
-— Отклонение: ±{int((max_dev)**0.5):02d} сек
+— Отклонение: ±{int(max_dev):02d} сек
 """
     return report.strip()
