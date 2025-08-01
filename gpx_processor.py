@@ -111,6 +111,18 @@ def process_gpx_file(file_path):
     segment_count = len(segment_paces)
     point_count = len(all_points)
 
+    std_dev_percent = std_dev / avg_pace * 100 if avg_pace > 0 else 0
+    if std_dev_percent < 3:
+        stability_label = "🟢 Очень стабильный темп"
+    elif std_dev_percent < 6:
+        stability_label = "🟡 Стабильный темп"
+    elif std_dev_percent < 10:
+        stability_label = "🟠 Средняя стабильность"
+    elif std_dev_percent < 15:
+        stability_label = "🔴 Нестабильный темп"
+    else:
+        stability_label = "🔴 Очень нестабильный темп"
+
     image_buffer = plot_pace_graph(segment_paces, avg_pace)
     hist_buffer = plot_histogram(segment_paces)
 
@@ -119,7 +131,7 @@ def process_gpx_file(file_path):
 📏 Дистанция: {distance_km:.2f} км
 ⏱️ Время: {int(total_time // 60):02d}:{int(total_time % 60):02d}
 ⚖️ Средний темп: {format_pace(avg_pace)} /км
-📊 СКО темпа: {format_pace(std_dev)} /км
+📊 СКО темпа: {format_pace(std_dev)} /км (±{std_dev_percent:.1f}%) — {stability_label}
 🔢 Учтено отрезков по {SEGMENT_LENGTH_METERS} м: {segment_count}
 📍 Всего GPS-точек в треке: {point_count}
 
