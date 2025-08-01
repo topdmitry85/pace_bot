@@ -108,6 +108,8 @@ def process_gpx_file(file_path):
     max_pace = segment_paces[max_index] if segment_paces else 0
 
     distance_km = total_distance / 1000
+    segment_count = len(segment_paces)
+    point_count = len(all_points)
 
     image_buffer = plot_pace_graph(segment_paces, avg_pace)
     hist_buffer = plot_histogram(segment_paces)
@@ -118,6 +120,8 @@ def process_gpx_file(file_path):
 ⏱️ Время: {int(total_time // 60):02d}:{int(total_time % 60):02d}
 ⚖️ Средний темп: {format_pace(avg_pace)} /км
 📊 СКО темпа: {format_pace(std_dev)} /км
+🔢 Учтено отрезков по {SEGMENT_LENGTH_METERS} м: {segment_count}
+📍 Всего GPS-точек в треке: {point_count}
 
 🎯 Самый стабильный отрезок:
 — Отметка {min_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
