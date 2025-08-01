@@ -14,18 +14,27 @@ def format_pace(seconds_per_km):
     return f"{minutes}:{seconds:02d}"
 
 def plot_pace_graph(segment_paces, avg_pace):
-    # Преобразуем темп в мин/км
-    segment_paces_min_per_km = [p / 60 for p in segment_paces]
-    avg_pace_min_per_km = avg_pace / 60
-
     plt.figure(figsize=(10, 4))
     x = [i * SEGMENT_LENGTH_METERS / 1000 for i in range(len(segment_paces))]
-    plt.plot(x, segment_paces_min_per_km, label='Темп (мин/км)', color='blue')
-    plt.axhline(avg_pace_min_per_km, color='red', linestyle='--', label='Средний темп')
+    plt.plot(x, segment_paces, label='Темп (с/км)', color='blue')
+    plt.axhline(avg_pace, color='red', linestyle='--', label='Средний темп')
     plt.xlabel('Дистанция (км)')
-    plt.ylabel('Темп (мин/км)')
+    plt.ylabel('Темп (с/км)')
     plt.title('График темпа по отрезкам')
     plt.legend()
+    plt.grid(True)
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    plt.close()
+    return buffer
+
+def plot_histogram(segment_paces):
+    plt.figure(figsize=(8, 4))
+    plt.hist(segment_paces, bins=20, color='green', edgecolor='black')
+    plt.xlabel('Темп (с/км)')
+    plt.ylabel('Частота')
+    plt.title('Гистограмма распределения темпов')
     plt.grid(True)
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
@@ -44,7 +53,7 @@ def process_gpx_file(file_path):
             all_points.extend(segment.points)
 
     if len(all_points) < 2:
-        return "❌ Недостаточно данных в GPX-файле.", None
+        return "❌ Недостаточно данных в GPX-файле.", None, None
 
     total_distance = 0
     total_time = 0
@@ -80,7 +89,7 @@ def process_gpx_file(file_path):
         segment_paces.append(pace)
 
     if total_distance == 0 or total_time == 0:
-        return "❌ Ошибка: невозможно вычислить параметры.", None
+        return "❌ Ошибка: невозможно вычислить параметры.", None, None
 
     avg_pace = total_time / (total_distance / 1000)
     pace_diffs = [(p - avg_pace) ** 2 for p in segment_paces]
@@ -99,6 +108,7 @@ def process_gpx_file(file_path):
     distance_km = total_distance / 1000
 
     image_buffer = plot_pace_graph(segment_paces, avg_pace)
+    hist_buffer = plot_histogram(segment_paces)
 
     report = f"""
 🏁 GPX-анализ завершён:
@@ -118,4 +128,4 @@ def process_gpx_file(file_path):
 — Отклонение: ±{format_pace(max_dev)} /км
 """.strip()
 
-    return report, image_buffer
+    return report, image_buffer, hist_buffer
