@@ -16,10 +16,11 @@ def format_pace(seconds_per_km):
 def plot_pace_graph(segment_paces, avg_pace):
     plt.figure(figsize=(10, 4))
     x = [i * SEGMENT_LENGTH_METERS / 1000 for i in range(len(segment_paces))]
-    plt.plot(x, segment_paces, label='Темп (с/км)', color='blue')
-    plt.axhline(avg_pace, color='red', linestyle='--', label='Средний темп')
+    y = [p / 60 for p in segment_paces]  # преобразование в мин/км
+    plt.plot(x, y, label='Темп (мин/км)', color='blue')
+    plt.axhline(avg_pace / 60, color='red', linestyle='--', label='Средний темп')
     plt.xlabel('Дистанция (км)')
-    plt.ylabel('Темп (с/км)')
+    plt.ylabel('Темп (мин/км)')
     plt.title('График темпа по отрезкам')
     plt.legend()
     plt.grid(True)
@@ -31,8 +32,9 @@ def plot_pace_graph(segment_paces, avg_pace):
 
 def plot_histogram(segment_paces):
     plt.figure(figsize=(8, 4))
-    plt.hist(segment_paces, bins=20, color='green', edgecolor='black')
-    plt.xlabel('Темп (с/км)')
+    paces_min_km = [p / 60 for p in segment_paces]
+    plt.hist(paces_min_km, bins=20, color='green', edgecolor='black')
+    plt.xlabel('Темп (мин/км)')
     plt.ylabel('Частота')
     plt.title('Гистограмма распределения темпов')
     plt.grid(True)
