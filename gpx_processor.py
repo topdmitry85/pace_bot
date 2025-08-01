@@ -114,14 +114,19 @@ def process_gpx_file(file_path):
     std_dev_percent = std_dev / avg_pace * 100 if avg_pace > 0 else 0
     if std_dev_percent < 3:
         stability_label = "🟢 Очень стабильный темп"
+        score = 9.5
     elif std_dev_percent < 6:
         stability_label = "🟡 Стабильный темп"
+        score = 8.5
     elif std_dev_percent < 10:
         stability_label = "🟠 Средняя стабильность"
+        score = 7.0
     elif std_dev_percent < 15:
         stability_label = "🔴 Нестабильный темп"
+        score = 5.5
     else:
         stability_label = "🔴 Очень нестабильный темп"
+        score = 4.0
 
     image_buffer = plot_pace_graph(segment_paces, avg_pace)
     hist_buffer = plot_histogram(segment_paces)
@@ -144,6 +149,8 @@ def process_gpx_file(file_path):
 — Отметка {max_index * SEGMENT_LENGTH_METERS / 1000:.2f} км
 — Темп: {format_pace(max_pace)} /км
 — Отклонение: ±{format_pace(max_dev)} /км
+
+🎖 Оценка пейсера: {score:.1f} / 10
 """.strip()
 
     return report, image_buffer, hist_buffer
